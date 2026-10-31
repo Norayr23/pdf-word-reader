@@ -1,0 +1,243 @@
+:root {
+  /* Overridden from JS when the user drags the splitter; the default scales with the window
+     so a half-screen window still leaves most of the width to the book. */
+  --side-panel-width: clamp(240px, 35vw, 460px);
+  --toolbar-height: 44px;
+  --color-background: #f4f4f6;
+  --color-surface: #ffffff;
+  --color-text: #1d1d22;
+  --color-muted: #6b6b76;
+  --color-border: #dcdce2;
+  --color-accent: #2f6fde;
+  --color-accent-soft: #e8f0fd;
+  --color-error: #c0392b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #1b1b1f;
+    --color-surface: #25252b;
+    --color-text: #e8e8ee;
+    --color-muted: #9a9aa6;
+    --color-border: #3a3a43;
+    --color-accent: #7aa7ff;
+    --color-accent-soft: #2b3550;
+    --color-error: #ff7b6b;
+  }
+}
+
+* { box-sizing: border-box; }
+/* PDF.js sizes pages with content-box borders; border-box made the rendered page 18px
+   smaller than its text layer, so selection boxes drifted away from the printed text. */
+.pdfViewer, .pdfViewer * { box-sizing: content-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+}
+
+#toolbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--toolbar-height);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 10;
+}
+
+#toolbar button, #toolbar a {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+#toolbar button:hover, #toolbar a:hover { background: var(--color-accent-soft); }
+
+.document-title {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-muted);
+}
+.toolbar-group { display: inline-flex; align-items: center; gap: 6px; }
+#pageNumberInput {
+  width: 64px;
+  font: inherit;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+#readerLayout {
+  position: fixed;
+  top: var(--toolbar-height); left: 0; right: 0; bottom: 0;
+}
+
+/* PDF.js requires its container to be absolutely positioned. The panel width is always
+   reserved so that opening a lookup never re-flows the page the user is reading. */
+#viewerContainer {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  right: 0;
+  overflow: auto;
+}
+body.side-panel-visible #viewerContainer { right: var(--side-panel-width); }
+
+#emptyState {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  pointer-events: none;
+}
+body.side-panel-visible #emptyState { right: var(--side-panel-width); }
+body.document-loaded #emptyState { display: none; }
+
+#sidePanel {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: var(--side-panel-width);
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  padding: 14px 16px 40px;
+  display: none;
+  line-height: 1.45;
+}
+body.side-panel-visible #sidePanel { display: block; }
+
+.panel-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.panel-top-bar .spacer { flex: 1; }
+
+.panel-button, .language-toggle button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.panel-button:hover { background: var(--color-accent-soft); }
+.panel-button:disabled { opacity: 0.6; cursor: default; }
+
+.language-toggle { display: inline-flex; }
+.language-toggle button { border-radius: 0; }
+.language-toggle button:first-child { border-radius: 6px 0 0 6px; }
+.language-toggle button:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+.language-toggle button.active { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+
+.phrase-heading { font-size: 24px; font-weight: 600; margin: 0; word-break: break-word; }
+.phrase-meta { color: var(--color-muted); margin: 2px 0 10px; }
+.phrase-meta .ipa { font-family: "Segoe UI", "Lucida Sans Unicode", sans-serif; margin-right: 10px; }
+.phrase-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+.quick-translation { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+.alternatives { color: var(--color-muted); font-size: 13px; margin: 0 0 4px; }
+.alternatives b { color: var(--color-text); font-weight: 600; }
+
+.panel-section { margin-top: 14px; }
+.panel-section h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  margin: 0 0 4px;
+}
+.panel-section p { margin: 0 0 6px; }
+
+.examples-list, .synonyms-list, .definitions-list { margin: 0; padding-left: 18px; }
+.examples-list li, .synonyms-list li, .definitions-list li { margin-bottom: 6px; }
+.example-translation { color: var(--color-muted); font-size: 13px; }
+
+.selectable-source { cursor: text; }
+.selectable-source::selection, .selectable-source *::selection { background: var(--color-accent-soft); }
+
+.original-sentence-block {
+  background: var(--color-accent-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.translated-sentence { font-size: 16px; }
+.context-sentence { color: var(--color-muted); font-size: 13px; font-style: italic; }
+
+.hint { color: var(--color-muted); font-size: 13px; }
+.error-message { color: var(--color-error); font-size: 13px; }
+
+.loading-indicator { color: var(--color-muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.loading-indicator::before {
+  content: "";
+  width: 12px; height: 12px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+details.dictionary-details summary { cursor: pointer; color: var(--color-muted); font-size: 13px; }
+body.drag-over #viewerContainer { outline: 3px dashed var(--color-accent); outline-offset: -6px; }
+
+/* Drag handle between the book and the panel. */
+#panelResizeHandle {
+  position: absolute;
+  top: 0; bottom: 0;
+  right: var(--side-panel-width);
+  width: 8px;
+  margin-right: -4px;
+  cursor: col-resize;
+  z-index: 5;
+  display: none;
+}
+body.side-panel-visible #panelResizeHandle { display: block; }
+#panelResizeHandle:hover, body.panel-resizing #panelResizeHandle { background: var(--color-accent-soft); }
+body.panel-resizing { cursor: col-resize; user-select: none; }
+
+/* Narrow windows: toolbar labels collapse to icons so the controls still fit in one row. */
+@media (max-width: 760px) {
+  .toolbar-label { display: none; }
+  #toolbar { gap: 6px; padding: 0 6px; }
+}
+
+.vocabulary-entry {
+  border-bottom: 1px solid var(--color-border);
+  padding: 10px 0;
+}
+.vocabulary-entry-header { display: flex; align-items: baseline; gap: 8px; }
+.vocabulary-entry-phrase { font-weight: 600; font-size: 16px; }
+.vocabulary-entry-translation { color: var(--color-muted); }
+.vocabulary-entry .phrase-actions { margin: 6px 0 0; }
+.panel-heading { font-size: 18px; font-weight: 600; margin: 0; }
+
+/* Softer selection colour over the book. */
+.textLayer ::selection { background: rgba(47, 111, 222, 0.22); }
+.textLayer br::selection { background: transparent; }
+
+/* Words already saved to the vocabulary, marked in every book. */
+::highlight(saved-vocabulary) {
+  background-color: rgba(255, 190, 0, 0.32);
+}

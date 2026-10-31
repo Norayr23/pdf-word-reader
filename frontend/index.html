@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF Word Reader</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/web/pdf_viewer.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="side-panel-visible">
+  <header id="toolbar">
+    <button id="openDocumentButton" type="button" title="Открыть PDF">📂<span class="toolbar-label"> Открыть</span></button>
+    <input id="documentFileInput" type="file" accept="application/pdf,.pdf" hidden>
+    <span id="documentTitle" class="document-title">Документ не открыт</span>
+    <span class="toolbar-group">
+      <input id="pageNumberInput" type="number" min="1" value="1" title="Страница">
+      <span id="pageCountLabel">/ 0</span>
+    </span>
+    <span class="toolbar-group">
+      <button id="zoomOutButton" type="button" title="Уменьшить">−</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomInButton" type="button" title="Увеличить">+</button>
+    </span>
+    <button id="openVocabularyButton" type="button" title="Сохранённые слова">📒<span class="toolbar-label"> Словарь</span></button>
+    <button id="toggleSidePanelButton" type="button" title="Показать/скрыть панель">◧<span class="toolbar-label"> Панель</span></button>
+  </header>
+
+  <main id="readerLayout">
+    <div id="viewerContainer">
+      <div id="viewer" class="pdfViewer"></div>
+    </div>
+    <div id="emptyState">
+      <p>Откройте PDF кнопкой «Открыть» или перетащите файл в окно.</p>
+    </div>
+    <div id="panelResizeHandle" title="Потяните, чтобы изменить ширину панели"></div>
+    <aside id="sidePanel"></aside>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
