@@ -11,7 +11,7 @@ Claude subscription — no separate API key or billing.
 
 - **Word or phrase (1–4 words)**
   - Instant: machine translation with alternatives by part of speech, IPA from a dictionary,
-    text-to-speech (normal and slow) and a recorded native pronunciation when available.
+    text-to-speech (normal and slow) and a real human recording from Wikimedia Commons when one exists.
   - A few seconds later, from Claude: meaning in *this* context, word breakdown
     (e.g. *bottleneck = bottle + neck*), literal vs figurative usage, examples and synonyms with nuances.
   - Explanations in **English or Russian** (toggle; the other language is generated on demand).
@@ -47,7 +47,8 @@ Browser (PDF.js viewer + side panel)
         ▼
 FastAPI server (started in the background by launcher.py)
  ├─ machine translation — Google / Microsoft public endpoints, with fallback and cooldown
- ├─ Free Dictionary API — IPA, definitions, recorded audio
+ ├─ Free Dictionary API — IPA, definitions
+ ├─ Wikimedia Commons — recorded pronunciations (checked before the button is shown)
  ├─ claude -p --model haiku — explanations, grammar (three parallel calls per word)
  └─ SQLite (data/reader.sqlite3) — caches and the saved vocabulary
 ```

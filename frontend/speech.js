@@ -39,6 +39,9 @@ export function speakEnglishText(text, speechRate = 0.95) {
   window.speechSynthesis.speak(utterance);
 }
 
-export function playRecordedPronunciation(audioUrl) {
-  new Audio(audioUrl).play().catch(() => {});
+export function playRecordedPronunciation(audioUrl, onPlaybackFailed) {
+  const recordedAudio = new Audio(audioUrl);
+  // A silent failure looked like a broken button; the caller shows the failure instead.
+  recordedAudio.addEventListener("error", () => onPlaybackFailed?.());
+  recordedAudio.play().catch(() => onPlaybackFailed?.());
 }

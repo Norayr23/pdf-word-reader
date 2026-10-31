@@ -2,6 +2,7 @@ import {
   deleteVocabularyEntry,
   listVocabularyEntries,
   requestPhrasePart,
+  requestRecordedPronunciation,
   requestQuickLookup,
   requestSentenceGrammar,
   requestSentenceTranslation,
@@ -452,6 +453,17 @@ function startPhraseLookup(phrase, contextSentence, parentPanelState, lookupOpti
     });
 
   loadAnalysisLanguage(phraseState, readerState.analysisLanguage);
+
+  // A real recording exists only for single, reasonably common words; the button appears
+  // only after the file is confirmed to be playable.
+  if (countWords(phrase) === 1) {
+    requestRecordedPronunciation(phrase, lookupAbortController.signal)
+      .then((recordedAudioUrl) => {
+        phraseState.recordedAudioUrl = recordedAudioUrl;
+        rerenderIfCurrent(phraseState);
+      })
+      .catch(() => {});
+  }
 }
 
 async function openVocabularyView() {

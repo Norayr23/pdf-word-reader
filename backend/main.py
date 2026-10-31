@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from . import storage
 from .claude_cli_client import ClaudeCliError, ask_claude_for_json
 from .config import EXTERNAL_HTTP_TIMEOUT_SECONDS, FRONTEND_DIRECTORY
-from .dictionary_client import lookup_english_dictionary_entry
+from .dictionary_client import find_recorded_pronunciation_url, lookup_english_dictionary_entry
 from .prompts import (
     ANALYSIS_LANGUAGES,
     ANALYSIS_PART_NAMES,
@@ -151,6 +151,12 @@ async def quick_lookup(request_body: QuickLookupRequest, request: Request):
         "translation_error": translation_error,
         "dictionary": dictionary_result,
     }
+
+
+@app.get("/api/recorded-pronunciation")
+async def get_recorded_pronunciation(request: Request, word: str = Query(min_length=1, max_length=60)):
+    audio_url = await find_recorded_pronunciation_url(request.app.state.http_client, word)
+    return {"audio_url": audio_url}
 
 
 @app.post("/api/phrase-part")

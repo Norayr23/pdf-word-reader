@@ -53,3 +53,11 @@ export async function deleteVocabularyEntry(vocabularyEntryId) {
     throw new Error(`HTTP ${response.status}`);
   }
 }
+
+export async function requestRecordedPronunciation(word, abortSignal) {
+  const response = await fetch(`/api/recorded-pronunciation?word=${encodeURIComponent(word)}`, { signal: abortSignal });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()).audio_url;
+}

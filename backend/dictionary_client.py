@@ -5,6 +5,7 @@ occasionally produce plausible-looking but wrong transcriptions.
 """
 from __future__ import annotations
 
+import asyncio
 from urllib.parse import quote
 
 import httpx
@@ -72,6 +73,26 @@ def parse_dictionary_entries(dictionary_entries: list) -> dict | None:
     }
 
 
+# Wikimedia rejects browser-like or anonymous agents (HTTP 403) and asks clients to name
+# themselves with a way to reach the maintainer.
+WIKIMEDIA_COMPLIANT_USER_AGENT = "PdfWordReader/1.0 (https://github.com/Norayr23/pdf-word-reader) python-httpx"
+
+
+async def is_audio_file_available(http_client: httpx.AsyncClient, audio_url: str) -> bool:
+    # The dictionary often lists recordings whose files no longer exist on its media host,
+    # so a link is only offered after a one-byte ranged request confirms the file is there.
+    try:
+        audio_response = await http_client.get(
+            audio_url,
+            headers={"Range": "bytes=0-0", "User-Agent": WIKIMEDIA_COMPLIANT_USER_AGENT},
+        )
+    except httpx.HTTPError:
+        return False
+    content_type = audio_response.headers.get("content-type", "")
+    is_audio_content = content_type.startswith("audio/") or content_type.startswith("application/ogg") or "mpeg" in content_type
+    return audio_response.status_code in (200, 206) and is_audio_content
+
+
 async def lookup_english_dictionary_entry(http_client: httpx.AsyncClient, phrase: str) -> dict | None:
     # A missing dictionary entry is normal for phrases and proper names, so every failure
     # here degrades to "no dictionary data" instead of an error for the user.
@@ -86,3 +107,32 @@ async def lookup_english_dictionary_entry(http_client: httpx.AsyncClient, phrase
     except ValueError:
         return None
     return parse_dictionary_entries(dictionary_entries)
+
+
+WIKIMEDIA_FILE_PATH_ENDPOINT = "https://commons.wikimedia.org/wiki/Special:FilePath/"
+# Wikimedia Commons hosts the original Wiktionary recordings; the dictionary API's own copies
+# were often unreachable, so Commons is checked first and the dictionary link is a fallback.
+WIKIMEDIA_RECORDING_PREFIXES = ("En-us-", "En-uk-", "En-au-")
+
+
+async def find_recorded_pronunciation_url(http_client: httpx.AsyncClient, word: str) -> str | None:
+    normalized_word = word.strip().lower()
+    if not normalized_word or " " in normalized_word:
+        return None
+    candidate_urls = [
+        WIKIMEDIA_FILE_PATH_ENDPOINT + quote(f"{recording_prefix}{normalized_word}.ogg")
+        for recording_prefix in WIKIMEDIA_RECORDING_PREFIXES
+    ]
+    dictionary_entry = await lookup_english_dictionary_entry(http_client, normalized_word)
+    if dictionary_entry and dictionary_entry["audio_url"]:
+        candidate_urls.append(dictionary_entry["audio_url"])
+
+    # All candidates are probed at once so the slowest missing file does not add up;
+    # the first available one in preference order wins.
+    availability = await asyncio.gather(
+        *(is_audio_file_available(http_client, candidate_url) for candidate_url in candidate_urls)
+    )
+    for candidate_url, is_available in zip(candidate_urls, availability):
+        if is_available:
+            return candidate_url
+    return None

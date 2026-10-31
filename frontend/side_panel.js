@@ -285,8 +285,18 @@ function renderPhraseView(panelElement, panelState, renderOptions) {
 
   const actionButtons = buildElement("div", { className: "phrase-actions" }, [
     ...buildSpeechButtons(panelState.phrase),
-    dictionary?.audio_url
-      ? buildButton("🎧 Запись", () => playRecordedPronunciation(dictionary.audio_url), "Запись носителя из словаря")
+    panelState.recordedAudioUrl
+      ? buildButton(
+        "🎧 Запись",
+        (clickEvent) => {
+          const recordingButton = clickEvent.currentTarget;
+          playRecordedPronunciation(panelState.recordedAudioUrl, () => {
+            recordingButton.textContent = "🎧 Запись недоступна";
+            recordingButton.disabled = true;
+          });
+        },
+        "Живая запись произношения носителем (из словаря)",
+      )
       : null,
     buildButton(
       panelState.isSaved ? "★ Сохранено" : "☆ В словарь",
