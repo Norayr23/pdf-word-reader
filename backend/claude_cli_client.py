@@ -129,6 +129,25 @@ def run_claude_process(prompt_text: str, use_speed_arguments: bool) -> subproces
         raise ClaudeCliError(f"Could not start Claude CLI: {start_error}") from start_error
 
 
+def describe_cli_failure(completed_process: subprocess.CompletedProcess) -> str:
+    # With --output-format json the reason is inside the JSON envelope ("result" or
+    # "errors"), after a long block of usage statistics; showing the raw text cut it off.
+    raw_output = (completed_process.stdout or "").strip()
+    try:
+        parsed_output = json.loads(raw_output)
+    except json.JSONDecodeError:
+        return ((completed_process.stderr or "").strip() or raw_output)[:500]
+    result_envelope = parsed_output[-1] if isinstance(parsed_output, list) and parsed_output else parsed_output
+    if not isinstance(result_envelope, dict):
+        return raw_output[:500]
+    failure_reasons = [
+        str(result_envelope.get(field_name))
+        for field_name in ("result", "errors", "subtype")
+        if result_envelope.get(field_name)
+    ]
+    return "; ".join(failure_reasons)[:500] or raw_output[:500]
+
+
 def log_claude_timing(message_text: str) -> None:
     # print goes to data/server.log, where uvicorn's output is redirected by the launcher.
     print(f"[claude] {message_text}", flush=True)
@@ -154,8 +173,17 @@ def ask_claude_blocking(prompt_text: str) -> str:
         log_claude_timing(f"retry without speed args: exit={completed_process.returncode} wall={time.monotonic() - retry_started_at:.1f}s")
 
     if completed_process.returncode != 0:
-        error_details = (completed_process.stderr or completed_process.stdout or "").strip()[:500]
-        raise ClaudeCliError(f"Claude CLI exited with code {completed_process.returncode}: {error_details}")
+        failure_description = describe_cli_failure(completed_process)
+        log_claude_timing(f"failure: {failure_description}")
+        # An expired login is the common case after a few days; the user can fix it in a
+        # minute if the panel says what to do instead of showing the raw CLI message.
+        if "authenticate" in failure_description.lower() or "login" in failure_description.lower():
+            raise ClaudeCliError(
+                "Claude Code не авторизован (истекла сессия входа). "
+                "Откройте терминал, запустите `claude`, выполните /login и нажмите «Повторить». "
+                f"[{failure_description}]"
+            )
+        raise ClaudeCliError(f"Claude CLI exited with code {completed_process.returncode}: {failure_description}")
     return extract_result_text_from_cli_output(completed_process.stdout)
 
 
