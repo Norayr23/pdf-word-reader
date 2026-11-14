@@ -21,6 +21,30 @@ const SECTION_TITLES = {
 
 // Model output is inserted only through textContent, never innerHTML, so an unexpected
 // answer cannot inject markup into the page.
+// While an analysis is loading, the panel is rebuilt each time a part arrives. A "click"
+// needs press and release on the same element, so a rebuild in between swallowed it and the
+// pronunciation buttons seemed dead. Buttons therefore act on press; "click" is kept only for
+// keyboard activation (detail === 0), which has no press/release gap.
+function attachPressHandler(element, pressHandler) {
+  if (element.tagName !== "BUTTON") {
+    element.addEventListener("click", pressHandler);
+    return;
+  }
+  element.addEventListener("pointerdown", (pointerEvent) => {
+    if (pointerEvent.button !== 0 || element.disabled) {
+      return;
+    }
+    // Keeps the current text selection and focus, which the reader relies on.
+    pointerEvent.preventDefault();
+    pressHandler(pointerEvent);
+  });
+  element.addEventListener("click", (clickEvent) => {
+    if (clickEvent.detail === 0) {
+      pressHandler(clickEvent);
+    }
+  });
+}
+
 function buildElement(tagName, elementOptions = {}, childNodes = []) {
   const element = document.createElement(tagName);
   if (elementOptions.className) {
@@ -33,7 +57,7 @@ function buildElement(tagName, elementOptions = {}, childNodes = []) {
     element.title = elementOptions.title;
   }
   if (elementOptions.onClick) {
-    element.addEventListener("click", elementOptions.onClick);
+    attachPressHandler(element, elementOptions.onClick);
   }
   for (const [attributeName, attributeValue] of Object.entries(elementOptions.attributes || {})) {
     element.setAttribute(attributeName, attributeValue);
