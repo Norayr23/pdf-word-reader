@@ -18,7 +18,9 @@ import {
   trimSurroundingPunctuation,
 } from "./selection_context.js";
 import { refreshSavedWordHighlights, setSavedVocabulary } from "./saved_word_highlighter.js";
+import { hideSelectionPopup, showSelectionPopup } from "./selection_popup.js";
 import { findCoreResult, renderSidePanel } from "./side_panel.js";
+import { speakEnglishText } from "./speech.js";
 
 const ANALYSIS_PART_NAMES = ["core", "usage", "synonyms"];
 
@@ -43,6 +45,7 @@ const pageElements = {
   zoomOutButton: document.getElementById("zoomOutButton"),
   toggleSidePanelButton: document.getElementById("toggleSidePanelButton"),
   openVocabularyButton: document.getElementById("openVocabularyButton"),
+  autoSpeakButton: document.getElementById("autoSpeakButton"),
 };
 
 const readerState = {
@@ -54,6 +57,8 @@ const readerState = {
   documentDisplayName: null,
   panelState: null,
   analysisLanguage: readStoredValue("analysisLanguage") || "en",
+  // On unless the user switched it off: hearing the selection is the most common need.
+  isAutoSpeakEnabled: readStoredValue("autoSpeak") !== "off",
   activePhraseLookupAbortController: null,
   lastSelectionSignature: null,
 };
@@ -124,6 +129,7 @@ function initializeViewer(pdfjsViewer) {
     // previous position, detached from the text.
     window.getSelection()?.removeAllRanges();
     readerState.lastSelectionSignature = null;
+    hideSelectionPopup();
     pageElements.zoomLabel.textContent = `${Math.round(scaleChangeEvent.scale * 100)}%`;
     writeStoredValue("zoomScale", scaleChangeEvent.presetValue || String(scaleChangeEvent.scale));
   });
@@ -441,10 +447,17 @@ function startPhraseLookup(phrase, contextSentence, parentPanelState, lookupOpti
   requestQuickLookup(phrase, lookupAbortController.signal)
     .then((quickLookupResponse) => {
       phraseState.quickLookup = quickLookupResponse;
+      const quickTranslation = quickLookupResponse.translation?.translated_text;
+      if (quickTranslation) {
+        lookupOptions.selectionPopup?.showTranslation(quickTranslation);
+      } else {
+        lookupOptions.selectionPopup?.showFailure();
+      }
     })
     .catch((quickLookupError) => {
       if (!isAbortError(quickLookupError)) {
         phraseState.quickLookupError = quickLookupError.message;
+        lookupOptions.selectionPopup?.showFailure();
       }
     })
     .finally(() => {
@@ -518,7 +531,7 @@ function loadSentenceGrammar(sentenceState, language, loadOptions = {}) {
     });
 }
 
-function startSentenceTranslation(sourceText, parentPanelState = null) {
+function startSentenceTranslation(sourceText, parentPanelState = null, selectionPopup = null) {
   // Sentence translations are not aborted: they are fast, and the sentence view may later
   // become the "back" target of a word lookup, so it must always finish.
   const sentenceState = {
@@ -538,9 +551,11 @@ function startSentenceTranslation(sourceText, parentPanelState = null) {
   requestSentenceTranslation(sourceText)
     .then((translationResponse) => {
       sentenceState.translatedText = translationResponse.translated_text;
+      selectionPopup?.showTranslation(translationResponse.translated_text);
     })
     .catch((translationError) => {
       sentenceState.translationError = translationError.message;
+      selectionPopup?.showFailure();
     })
     .finally(() => {
       sentenceState.isLoading = false;
@@ -588,13 +603,20 @@ function processCurrentSelection() {
 
   const isPhrase = countWords(selectedText) <= MAXIMUM_WORDS_FOR_PHRASE_ANALYSIS;
   if (isPdfSelection) {
+    const textToShow = isPhrase ? trimSurroundingPunctuation(selectedText) : selectedText;
+    if (!textToShow) {
+      return;
+    }
+    // Speech starts before any network request: the browser voice is local, and the quick
+    // "hear it and read on" case should not wait for the translation.
+    if (readerState.isAutoSpeakEnabled) {
+      speakEnglishText(textToShow);
+    }
+    const selectionPopup = showSelectionPopup(pageElements.viewerContainer, selectionRange.getBoundingClientRect());
     if (isPhrase) {
-      const phrase = trimSurroundingPunctuation(selectedText);
-      if (phrase) {
-        startPhraseLookup(phrase, computePdfContextSentence(selectionRange, selectedText), null);
-      }
+      startPhraseLookup(textToShow, computePdfContextSentence(selectionRange, selectedText), null, { selectionPopup });
     } else {
-      startSentenceTranslation(selectedText);
+      startSentenceTranslation(selectedText, null, selectionPopup);
     }
     return;
   }
@@ -620,7 +642,21 @@ function processCurrentSelection() {
 
 // ---------- wiring ----------
 
+function updateAutoSpeakButton() {
+  pageElements.autoSpeakButton.classList.toggle("active", readerState.isAutoSpeakEnabled);
+  pageElements.autoSpeakButton.title = readerState.isAutoSpeakEnabled
+    ? "Автоозвучка включена: выделенный текст озвучивается сразу"
+    : "Автоозвучка выключена";
+}
+
 function wireSelectionHandling() {
+  // A new press in the book starts a new selection, so the old bubble no longer applies.
+  pageElements.viewerContainer.addEventListener("pointerdown", hideSelectionPopup);
+  document.addEventListener("keydown", (keyEvent) => {
+    if (keyEvent.key === "Escape") {
+      hideSelectionPopup();
+    }
+  });
   document.addEventListener("mouseup", (mouseEvent) => {
     if (mouseEvent.button !== 0) {
       return;
@@ -652,6 +688,12 @@ function wireToolbar() {
   });
 
   pageElements.openVocabularyButton.addEventListener("click", openVocabularyView);
+  updateAutoSpeakButton();
+  pageElements.autoSpeakButton.addEventListener("click", () => {
+    readerState.isAutoSpeakEnabled = !readerState.isAutoSpeakEnabled;
+    writeStoredValue("autoSpeak", readerState.isAutoSpeakEnabled ? "on" : "off");
+    updateAutoSpeakButton();
+  });
   pageElements.zoomInButton.addEventListener("click", () => changeZoom(ZOOM_STEP_FACTOR));
   pageElements.zoomOutButton.addEventListener("click", () => changeZoom(1 / ZOOM_STEP_FACTOR));
   pageElements.viewerContainer.addEventListener(

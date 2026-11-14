@@ -241,3 +241,30 @@ body.panel-resizing { cursor: col-resize; user-select: none; }
 ::highlight(saved-vocabulary) {
   background-color: rgba(255, 190, 0, 0.32);
 }
+
+/* Translation bubble above the selected text. */
+#selectionPopup {
+  position: absolute;
+  z-index: 20;
+  max-width: 360px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #1d1d22;
+  color: #ffffff;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.35;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  user-select: text;
+}
+#selectionPopup[hidden] { display: none; }
+#selectionPopup.is-pending { color: #b8b8c4; }
+#selectionPopup.is-error { color: #ffb4a8; }
+@media (prefers-color-scheme: dark) {
+  #selectionPopup { background: #f1f1f5; color: #1d1d22; }
+  #selectionPopup.is-pending { color: #6b6b76; }
+  #selectionPopup.is-error { color: #c0392b; }
+}
+
+#autoSpeakButton.active { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }

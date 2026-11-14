@@ -9,6 +9,9 @@ Claude subscription — no separate API key or billing.
 
 ## Features
 
+- **Instant feedback on any selection** — a small translation bubble appears right above the
+  selected text and the selection is spoken aloud at once (toggle with **🔊 Auto** in the toolbar),
+  so a quick "what is it and how does it sound" needs no glance at the side panel.
 - **Word or phrase (1–4 words)**
   - Instant: machine translation with alternatives by part of speech, IPA from a dictionary,
     text-to-speech (normal and slow) and a real human recording from Wikimedia Commons when one exists.
