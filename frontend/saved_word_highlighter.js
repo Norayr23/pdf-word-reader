@@ -4,7 +4,13 @@
 
 const HIGHLIGHT_NAME = "saved-vocabulary";
 // Simple inflections, so a word saved as "increase" also marks "increased" and "increases".
+// Applied to every word of a phrase: "stretch out" must also find "stretched out".
 const INFLECTION_SUFFIX_PATTERN = "(?:s|es|ed|d|ing|ly)?";
+// PDF.js often puts each word of a justified line into its own element. The text of a whole
+// layer is matched as one string, with this marker between elements, so phrases can span
+// elements; between words of a phrase any mix of whitespace and markers is accepted.
+const NODE_SEPARATOR = "\u0000";
+const WORD_GAP_PATTERN = "[\\s\\u0000]+";
 
 let savedPhrasePattern = null;
 
@@ -41,7 +47,12 @@ export function setSavedVocabulary(vocabularyEntries) {
   // Longer phrases first, so "bite the bullet" wins over "bite" when both are saved.
   const alternatives = [...allPhraseForms]
     .sort((firstForm, secondForm) => secondForm.length - firstForm.length)
-    .map((phraseForm) => escapeForRegularExpression(phraseForm).replace(/\s+/g, "\\s+") + INFLECTION_SUFFIX_PATTERN);
+    .map((phraseForm) =>
+      phraseForm
+        .split(/\s+/)
+        .map((phraseWord) => escapeForRegularExpression(phraseWord) + INFLECTION_SUFFIX_PATTERN)
+        .join(WORD_GAP_PATTERN),
+    );
   savedPhrasePattern = new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives.join("|")})(?![\\p{L}\\p{N}])`, "giu");
 }
 
@@ -57,15 +68,30 @@ export function refreshSavedWordHighlights(viewerElement) {
   // Only pages currently rendered by PDF.js have a text layer; the rest are covered when
   // their text layer appears and this function runs again.
   for (const textLayerElement of viewerElement.querySelectorAll(".textLayer")) {
+    const textNodes = [];
+    const nodeStartOffsets = [];
+    let layerText = "";
     const textWalker = document.createTreeWalker(textLayerElement, NodeFilter.SHOW_TEXT);
     while (textWalker.nextNode()) {
-      const textNode = textWalker.currentNode;
-      for (const phraseMatch of textNode.data.matchAll(savedPhrasePattern)) {
-        const matchedRange = new Range();
-        matchedRange.setStart(textNode, phraseMatch.index);
-        matchedRange.setEnd(textNode, phraseMatch.index + phraseMatch[0].length);
-        matchedRanges.push(matchedRange);
+      nodeStartOffsets.push(layerText.length);
+      textNodes.push(textWalker.currentNode);
+      layerText += textWalker.currentNode.data + NODE_SEPARATOR;
+    }
+    // Maps a position in the joined layer text back to its text node and offset.
+    const locatePosition = (layerOffset, isEndPosition) => {
+      let nodeIndex = nodeStartOffsets.length - 1;
+      while (nodeIndex > 0 && nodeStartOffsets[nodeIndex] > layerOffset - (isEndPosition ? 1 : 0)) {
+        nodeIndex -= 1;
       }
+      return { node: textNodes[nodeIndex], offset: layerOffset - nodeStartOffsets[nodeIndex] };
+    };
+    for (const phraseMatch of layerText.matchAll(savedPhrasePattern)) {
+      const matchStart = locatePosition(phraseMatch.index, false);
+      const matchEnd = locatePosition(phraseMatch.index + phraseMatch[0].length, true);
+      const matchedRange = new Range();
+      matchedRange.setStart(matchStart.node, matchStart.offset);
+      matchedRange.setEnd(matchEnd.node, matchEnd.offset);
+      matchedRanges.push(matchedRange);
     }
   }
   CSS.highlights.set(HIGHLIGHT_NAME, new Highlight(...matchedRanges));
