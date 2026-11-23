@@ -375,6 +375,27 @@ async function saveCurrentPhrase() {
   rerenderIfCurrent(phraseState);
 }
 
+// The free machine translators sometimes refuse for a while (rate limits), while the
+// "core" part from Claude also carries a translation a few seconds later. Instead of a final
+// "unavailable", the bubble keeps waiting and shows Claude's translation when it arrives.
+function showClaudeTranslationInPopupWhenReady(phraseState) {
+  if (!phraseState.selectionPopup) {
+    return;
+  }
+  const coreTranslation = findCoreResult(phraseState)?.translation_ru;
+  if (coreTranslation) {
+    phraseState.selectionPopup.showTranslation(coreTranslation);
+    return;
+  }
+  const corePartStates = Object.values(phraseState.partsByLanguage).map((partsOfLanguage) => partsOfLanguage.core);
+  const isCoreStillLoading = corePartStates.some((corePartState) => corePartState?.isLoading);
+  if (isCoreStillLoading) {
+    phraseState.isPopupWaitingForClaudeTranslation = true;
+  } else {
+    phraseState.selectionPopup.showFailure();
+  }
+}
+
 function loadAnalysisPart(phraseState, language, partName) {
   const partsOfLanguage = (phraseState.partsByLanguage[language] = phraseState.partsByLanguage[language] || {});
   const partState = { isLoading: true, result: null, error: null };
@@ -383,6 +404,10 @@ function loadAnalysisPart(phraseState, language, partName) {
   requestPhrasePart(phraseState.phrase, phraseState.contextSentence, language, partName, phraseState.abortSignal)
     .then((partResponse) => {
       partState.result = partResponse.result;
+      if (partName === "core" && phraseState.isPopupWaitingForClaudeTranslation) {
+        phraseState.isPopupWaitingForClaudeTranslation = false;
+        showClaudeTranslationInPopupWhenReady(phraseState);
+      }
       // A word saved before Claude finished is re-saved so the flashcard gets the full analysis.
       if (phraseState.isSaved) {
         saveVocabularyEntry(buildVocabularyPayload(phraseState)).catch(() => {});
@@ -390,6 +415,10 @@ function loadAnalysisPart(phraseState, language, partName) {
     })
     .catch((partError) => {
       partState.error = isAbortError(partError) ? "запрос отменён" : partError.message;
+      if (partName === "core" && phraseState.isPopupWaitingForClaudeTranslation) {
+        phraseState.isPopupWaitingForClaudeTranslation = false;
+        phraseState.selectionPopup?.showFailure();
+      }
     })
     .finally(() => {
       partState.isLoading = false;
@@ -441,6 +470,8 @@ function startPhraseLookup(phrase, contextSentence, parentPanelState, lookupOpti
     isQuickLookupLoading: true,
     partsByLanguage: {},
     isSaved: Boolean(lookupOptions.openedFromVocabulary),
+    selectionPopup: lookupOptions.selectionPopup || null,
+    isPopupWaitingForClaudeTranslation: false,
   };
   showPanelState(phraseState);
 
@@ -451,13 +482,13 @@ function startPhraseLookup(phrase, contextSentence, parentPanelState, lookupOpti
       if (quickTranslation) {
         lookupOptions.selectionPopup?.showTranslation(quickTranslation);
       } else {
-        lookupOptions.selectionPopup?.showFailure();
+        showClaudeTranslationInPopupWhenReady(phraseState);
       }
     })
     .catch((quickLookupError) => {
       if (!isAbortError(quickLookupError)) {
         phraseState.quickLookupError = quickLookupError.message;
-        lookupOptions.selectionPopup?.showFailure();
+        showClaudeTranslationInPopupWhenReady(phraseState);
       }
     })
     .finally(() => {
